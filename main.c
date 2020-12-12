@@ -10,6 +10,7 @@
 #include "storage.h"
 #include "cli.h"
 #include "indexing.h"
+#include "queries.h"
 
 int main(int argc, const char * argv[]) {
     // insert code here...

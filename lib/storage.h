@@ -17,7 +17,8 @@ typedef struct indexListNode {
     struct indexListNode *next;
 } indexListNode_t;
 
-void delete_index_list(indexListNode_t** head);
+void destroy_index_list(indexListNode_t** head);
+// the element before inserting to the list is copied
 void insert_to_index_list(indexListNode_t** head, const indexObject_t* element);
 void save_index_list(indexListNode_t** head, const char *path);
 void load_index_list(indexListNode_t** head, const char *path);
