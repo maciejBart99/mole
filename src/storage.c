@@ -1,10 +1,15 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
 
-#include "storage.h"
-#include "shared.h"
+#include "../lib/storage.h"
+#include "../lib/shared.h"
+#include "../lib/bulk_io.h"
 
-void destory_index_list(indexListNode_t** head) {
+void destroy_index_list(indexListNode_t** head) {
     indexListNode_t *next;
     while(*head) {
         free((*head)->data);
@@ -15,40 +20,46 @@ void destory_index_list(indexListNode_t** head) {
 }
 
 void insert_to_index_list(indexListNode_t** head, const indexObject_t* element) {
-    indexListNode_t* node = malloc(sizeof(indexListNode_t));
+    indexListNode_t* node = (indexListNode_t*) malloc(sizeof(indexListNode_t));
     if (node == NULL) ERR("malloc");
-    node->data = malloc(sizeof(indexListNode_t));
+    node->data = malloc(sizeof(indexObject_t));
     if (node->data == NULL) ERR("malloc");
-    if (memcpy(node->data, element, sizeof(indexObject_t)) == NULL) ERR("memcpy");
+    *(node->data) = *element;
     node->next = *head;
     *head = node;
 }
 
-void save_index_list(indexListNode_t** head, const char *path) {
+void save_index_list(const indexListNode_t* head, const char *path) {
     int fd;
-    indexListNode_t *p = *head;
-    if ((fd = open(path, O_TRUNC | O_CREAT | O_WRONLY)) < 0) ERR("open");
+    if ((fd = TEMP_FAILURE_RETRY(open(path, O_TRUNC | O_CREAT | O_WRONLY, 0777))) < 0) ERR("open");
     
-    while(p) {
-        if (write(fd, p->data, sizeof(indexObject_t)) != sizeof(indexObject_t)) ERR("write");
-        p = p->next;
+    while(head) {
+        if (bulk_write(fd, (char*)head->data, sizeof(indexObject_t)) != sizeof(indexObject_t)) ERR("write");
+        head = head->next;
     }
     
-    if (close(fd)) ERR("close");
+    if (TEMP_FAILURE_RETRY(close(fd))) ERR("close");
 }
 
 void load_index_list(indexListNode_t** head, const char *path) {
     int fd;
     ssize_t rd;
     indexObject_t p;
-    if ((fd = open(path, O_RDONLY)) < 0) ERR("open");
+    if ((fd = TEMP_FAILURE_RETRY(open(path, O_RDONLY))) < 0) ERR("open");
     
-    while((rd = read(fd, &p, sizeof(indexObject_t))) != 0) {
+    while((rd = bulk_read(fd, (char*)&p, sizeof(indexObject_t))) != 0) {
         if (rd < 0) ERR("read");
-        if (rd != sizeof(indexObject_t)) ERR("corrupted index file format");
+        if (rd != sizeof(indexObject_t)) ERR_PLAIN("Corrupted index file format");
         insert_to_index_list(head, &p);
     }
     
-    if (close(fd)) ERR("close");
+    if (TEMP_FAILURE_RETRY(close(fd))) ERR("close");
 }
 
+bool is_index_list_longer_than(const indexListNode_t* head, int than) {
+    while (than > 0) {
+        if ((head = head->next) == NULL) return false;
+        than--;
+    }
+    return true;
+}
